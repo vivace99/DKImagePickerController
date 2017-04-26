@@ -15,5 +15,5 @@ open class DKAssetGroup : NSObject {
 	open var totalCount: Int!
 	
 	open var originalCollection: PHAssetCollection!
-	open var fetchResult: PHFetchResult<AnyObject>!
+	open var fetchResult: PHFetchResult<PHAsset>!
 }
