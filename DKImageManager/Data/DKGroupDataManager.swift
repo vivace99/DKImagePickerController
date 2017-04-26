@@ -15,32 +15,31 @@ protocol DKGroupDataManagerObserver {
 	@objc optional func groupDidRemove(_ groupId: String)
 	@objc optional func group(_ groupId: String, didRemoveAssets assets: [DKAsset])
 	@objc optional func group(_ groupId: String, didInsertAssets assets: [DKAsset])
-    @objc optional func groupDidUpdateComplete(_ groupId: String)
 }
 
-public class DKGroupDataManager: DKBaseManager, PHPhotoLibraryChangeObserver {
+open class DKGroupDataManager: DKBaseManager, PHPhotoLibraryChangeObserver {
 
-    public var groupIds: [String]?
-	private var groups: [String : DKAssetGroup]?
-    private var assets = [String: DKAsset]()
+	fileprivate var groups: [String : DKAssetGroup]?
+	open var groupIds: [String]?
 	
-	public var assetGroupTypes: [PHAssetCollectionSubtype]?
-	public var assetFetchOptions: PHFetchOptions?
-	public var showsEmptyAlbums: Bool = true
+	open var assetGroupTypes: [PHAssetCollectionSubtype]?
+	open var assetFetchOptions: PHFetchOptions?
+	open var showsEmptyAlbums: Bool = true
 	
 	deinit {
 		PHPhotoLibrary.shared().unregisterChangeObserver(self)
 	}
 	
-	public func invalidate() {
+	open func invalidate() {
 		self.groupIds?.removeAll()
-        self.groups?.removeAll()
-        self.assets.removeAll()
+		self.groupIds = nil
+		self.groups?.removeAll()
+		self.groups = nil
 		
 		PHPhotoLibrary.shared().unregisterChangeObserver(self)
 	}
 	
-	public func fetchGroups(_ completeBlock: (_ groups: [String]?, _ error: NSError?) -> Void) {
+	open func fetchGroups(_ completeBlock: (_ groups: [String]?, _ error: NSError?) -> Void) {
 		if let assetGroupTypes = self.assetGroupTypes {
 			if self.groups != nil {
 				completeBlock(self.groupIds, nil)
@@ -51,16 +50,18 @@ public class DKGroupDataManager: DKBaseManager, PHPhotoLibraryChangeObserver {
 			var groupIds: [String] = []
 			
 			for (_, groupType) in assetGroupTypes.enumerated() {
-                let fetchResult = PHAssetCollection.fetchAssetCollections(with: self.collectionTypeForSubtype(groupType),
+				let fetchResult = PHAssetCollection.fetchAssetCollections(with: self.collectionTypeForSubtype(groupType),
 				                                                                  subtype: groupType,
 				                                                                  options: nil)
-                fetchResult.enumerateObjects({ (collection, index, stop) in
-                    let assetGroup = DKAssetGroup()
-                    assetGroup.groupId = collection.localIdentifier
-                    self.updateGroup(assetGroup, collection: collection)
-                    if self.showsEmptyAlbums || assetGroup.totalCount > 0 {
-                        groups[assetGroup.groupId] = assetGroup
-                        groupIds.append(assetGroup.groupId)
+                fetchResult.enumerateObjects({ object, index, stop in
+                    if let collection = object as? PHAssetCollection {
+                        let assetGroup = DKAssetGroup()
+                        assetGroup.groupId = collection.localIdentifier
+                        self.updateGroup(assetGroup, collection: collection)
+                        if self.showsEmptyAlbums || assetGroup.totalCount > 0 {
+                            groups[assetGroup.groupId] = assetGroup
+                            groupIds.append(assetGroup.groupId)
+                        }
                     }
                 })
 			}
@@ -72,82 +73,77 @@ public class DKGroupDataManager: DKBaseManager, PHPhotoLibraryChangeObserver {
 		}
 	}
 	
-	public func fetchGroupWithGroupId(_ groupId: String) -> DKAssetGroup {
+	open func fetchGroupWithGroupId(_ groupId: String) -> DKAssetGroup {
 		return self.groups![groupId]!
 	}
 	
-	public func fetchGroupThumbnailForGroup(_ groupId: String, size: CGSize, options: PHImageRequestOptions, completeBlock: @escaping (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
+	open func fetchGroupThumbnailForGroup(_ groupId: String, size: CGSize, options: PHImageRequestOptions, completeBlock: (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
 		let group = self.fetchGroupWithGroupId(groupId)
-		if group.totalCount == 0 {
+		if group.fetchResult.count == 0 {
 			completeBlock(nil, nil)
 			return
 		}
 		
-		let latestAsset = DKAsset(originalAsset:group.fetchResult.lastObject!)
+		let latestAsset = DKAsset(originalAsset:group.fetchResult.firstObject as! PHAsset)
 		latestAsset.fetchImageWithSize(size, options: options, completeBlock: completeBlock)
 	}
 	
-	public func fetchAsset(_ group: DKAssetGroup, index: Int) -> DKAsset {
-        let originalAsset = self.fetchOriginalAsset(group, index: index)
-        var asset = self.assets[originalAsset.localIdentifier]
-        if asset == nil {
-            asset = DKAsset(originalAsset:originalAsset)
-            self.assets[originalAsset.localIdentifier] = asset
-        }
-		return asset!
+	open func fetchAssetWithGroup(_ group: DKAssetGroup, index: Int) -> DKAsset {
+		let asset = DKAsset(originalAsset:group.fetchResult[index] as! PHAsset)
+		return asset
 	}
-    
-    public func fetchOriginalAsset(_ group: DKAssetGroup, index: Int) -> PHAsset {
-        return group.fetchResult[group.totalCount - index - 1]
-    }
 	
 	// MARK: - Private methods
 	
-	private func collectionTypeForSubtype(_ subtype: PHAssetCollectionSubtype) -> PHAssetCollectionType {
+	fileprivate func collectionTypeForSubtype(_ subtype: PHAssetCollectionSubtype) -> PHAssetCollectionType {
 		return subtype.rawValue < PHAssetCollectionSubtype.smartAlbumGeneric.rawValue ? .album : .smartAlbum
 	}
 	
-	private func updateGroup(_ group: DKAssetGroup, collection: PHAssetCollection) {
+	fileprivate func updateGroup(_ group: DKAssetGroup, collection: PHAssetCollection) {
 		group.groupName = collection.localizedTitle
-		self.updateGroup(group, fetchResult: PHAsset.fetchAssets(in: collection, options: self.assetFetchOptions))
+		self.updateGroup(group, fetchResult: PHAsset.fetchAssets(in: collection, options: self.assetFetchOptions) as! PHFetchResult<AnyObject>)
 		group.originalCollection = collection
 	}
 	
-	private func updateGroup(_ group: DKAssetGroup, fetchResult: PHFetchResult<PHAsset>) {
-		group.fetchResult = fetchResult
+	fileprivate func updateGroup(_ group: DKAssetGroup, fetchResult: PHFetchResult<AnyObject>) {
+		group.fetchResult = fetchResult as! PHFetchResult<PHAsset>
 		group.totalCount = group.fetchResult.count
 	}
 	
 	// MARK: - PHPhotoLibraryChangeObserver methods
 	
-	public func photoLibraryDidChange(_ changeInstance: PHChange) {
-        for group in self.groups!.values {
+	open func photoLibraryDidChange(_ changeInstance: PHChange) {
+		for group in self.groups!.values {
 			if let changeDetails = changeInstance.changeDetails(for: group.originalCollection) {
 				if changeDetails.objectWasDeleted {
 					self.groups![group.groupId] = nil
-					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.groupDidRemove(_:)), object: group.groupId as AnyObject?)
+					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.groupDidRemove(_:)), object: group.groupId as AnyObject)
 					continue
 				}
 				
 				if let objectAfterChanges = changeDetails.objectAfterChanges as? PHAssetCollection {
 					self.updateGroup(self.groups![group.groupId]!, collection: objectAfterChanges)
-					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.groupDidUpdate(_:)), object: group.groupId as AnyObject?)
+					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.groupDidUpdate(_:)), object: group.groupId as AnyObject)
 				}
 			}
 			
 			if let changeDetails = changeInstance.changeDetails(for: group.fetchResult) {
-                let removedAssets = changeDetails.removedObjects.map{ DKAsset(originalAsset: $0) }
-				if removedAssets.count > 0 {
-					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.group(_:didRemoveAssets:)), object: group.groupId as AnyObject?, objectTwo: removedAssets as AnyObject?)
+				if let removedIndexes = changeDetails.removedIndexes {
+					var removedAssets = [DKAsset]()
+					(removedIndexes as NSIndexSet).enumerate({ index, stop in
+						removedAssets.append(self.fetchAssetWithGroup(group, index: index))
+					})
+					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.group(_:didRemoveAssets:)), object: group.groupId as AnyObject, objectTwo: removedAssets as AnyObject)
 				}
-				self.updateGroup(group, fetchResult: changeDetails.fetchResultAfterChanges)
+				self.updateGroup(group, fetchResult: changeDetails.fetchResultAfterChanges as! PHFetchResult<AnyObject>)
 				
-                let insertedAssets = changeDetails.insertedObjects.map{ DKAsset(originalAsset: $0) }
-				if insertedAssets.count > 0  {
-					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.group(_:didInsertAssets:)), object: group.groupId as AnyObject?, objectTwo: insertedAssets as AnyObject?)
+				if changeDetails.insertedObjects.count > 0  {
+					var insertedAssets = [DKAsset]()
+					for insertedAsset in changeDetails.insertedObjects {
+						insertedAssets.append(DKAsset(originalAsset: insertedAsset as! PHAsset))
+					}
+					self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.group(_:didInsertAssets:)), object: group.groupId as AnyObject, objectTwo: insertedAssets as AnyObject)
 				}
-                
-                self.notifyObserversWithSelector(#selector(DKGroupDataManagerObserver.groupDidUpdateComplete(_:)), object: group.groupId as AnyObject?)
 			}
 		}
 	}
