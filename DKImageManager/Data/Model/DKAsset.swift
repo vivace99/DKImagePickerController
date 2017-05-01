@@ -62,17 +62,17 @@ open class DKAsset: NSObject {
 		}
 	}
 	
-	open func fetchImageWithSize(_ size: CGSize, completeBlock: (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
+	open func fetchImageWithSize(_ size: CGSize, completeBlock: @escaping (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
 		self.fetchImageWithSize(size, options: nil, completeBlock: completeBlock)
 	}
 	
-	open func fetchImageWithSize(_ size: CGSize, options: PHImageRequestOptions?, completeBlock: (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
+	open func fetchImageWithSize(_ size: CGSize, options: PHImageRequestOptions?, completeBlock: @escaping (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
 		self.fetchImageWithSize(size, options: options, contentMode: .aspectFit, completeBlock: completeBlock)
 	}
 	
-	open func fetchImageWithSize(_ size: CGSize, options: PHImageRequestOptions?, contentMode: PHImageContentMode, completeBlock: (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
+	open func fetchImageWithSize(_ size: CGSize, options: PHImageRequestOptions?, contentMode: PHImageContentMode, completeBlock: @escaping (_ image: UIImage?, _ info: [AnyHashable: Any]?) -> Void) {
 		if let _ = self.originalAsset {
-			//todo getImageManager().fetchImageForAsset(self, size: size, options: options, contentMode: contentMode, completeBlock: completeBlock)
+			getImageManager().fetchImageForAsset(self, size: size, options: options, contentMode: contentMode, completeBlock: completeBlock)
 		} else {
 			completeBlock(self.image!, nil)
 		}
